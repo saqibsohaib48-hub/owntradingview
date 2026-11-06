@@ -1,0 +1,7 @@
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
+numpy>=1.26
+pandas>=2.1
+# Optional: download real market data from Yahoo Finance
+yfinance>=0.2.40

@@ -1,0 +1,15 @@
+//@version=5
+strategy("Supertrend Long/Short (Pine)", overlay=true)
+atrLen = input.int(10, "ATR Length")
+factor = input.float(3.0, "Factor")
+
+[st, dir] = ta.supertrend(factor, atrLen)
+plot(st, "Supertrend", color=color.teal, linewidth=2)
+
+goLong  = ta.change(dir) < 0
+goShort = ta.change(dir) > 0
+
+if goLong
+    strategy.entry("Long", strategy.long)
+else if goShort
+    strategy.entry("Short", strategy.short)

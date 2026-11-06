@@ -1,0 +1,23 @@
+//@version=5
+strategy("RSI Mean Reversion (Pine)", overlay=true)
+rsiLen    = input.int(14, "RSI Length")
+oversold  = input.int(30, "Oversold")
+overbought = input.int(70, "Overbought")
+trendLen  = input.int(200, "Trend Filter SMA")
+stopPct   = input.float(5.0, "Stop Loss %")
+
+r = ta.rsi(close, rsiLen)
+trend = ta.sma(close, trendLen)
+plot(trend, "Trend SMA", color=color.gray)
+
+// Only buy dips while the long-term trend is up
+longCond = ta.crossover(r, oversold) and close > trend
+exitCond = ta.crossover(r, overbought)
+
+if longCond
+    strategy.entry("Long", strategy.long)
+if exitCond
+    strategy.close("Long")
+strategy.exit("Stop", "Long", loss=stopPct)
+
+plotshape(longCond, "Buy", style=shape.triangleup, location=location.belowbar, color=color.green)

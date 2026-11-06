@@ -1,0 +1,14 @@
+//@version=5
+strategy("EMA Crossover (Pine)", overlay=true)
+fastLen = input.int(12, "Fast EMA")
+slowLen = input.int(26, "Slow EMA")
+
+fast = ta.ema(close, fastLen)
+slow = ta.ema(close, slowLen)
+plot(fast, "Fast", color=color.lime)
+plot(slow, "Slow", color=color.red)
+
+if ta.crossover(fast, slow)
+    strategy.entry("Long", strategy.long)
+if ta.crossunder(fast, slow)
+    strategy.close("Long")
