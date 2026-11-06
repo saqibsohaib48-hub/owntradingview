@@ -2,7 +2,9 @@
 
 A self-hosted, TradingView-style charting and backtesting app. Write indicators and strategies in
 **Pine Script** or **Python**, backtest them, compare several strategies side by side, and grid-search
-their parameters — all running locally on your own machine.
+their parameters. It runs as a **website on GitHub Pages** (nothing to install) or on your own computer.
+
+**▶ Open the app: https://YOUR_USERNAME.github.io/opentrade/**
 
 ![tests](https://github.com/YOUR_USERNAME/opentrade/actions/workflows/tests.yml/badge.svg)
 
@@ -21,7 +23,34 @@ their parameters — all running locally on your own machine.
 - **Live updates** — ⟳ Refresh pulls the latest prices from Yahoo Finance; "＋ Add ticker…" adds any Yahoo symbol (ETH-USD, AAPL, SI=F, EURUSD=X…)
 - **Your own data** — upload any CSV
 
-## Quick start
+## Use it as a website (GitHub Pages)
+
+One-time setup, about 2 minutes:
+
+1. In your repo on GitHub, go to **Settings → Pages**.
+2. Under **Build and deployment → Source**, choose **GitHub Actions**.
+3. Go to the **Actions** tab, click **deploy-pages** → **Run workflow** (after that it redeploys on every push).
+4. When it turns green, open **https://YOUR_USERNAME.github.io/opentrade/**.
+
+The first visit downloads the Python engine (~25 MB, about 10 seconds); after that the browser caches it.
+
+**How it works:** the page runs the same Python code as the server, inside your browser via
+[Pyodide](https://pyodide.org) (Python compiled to WebAssembly). The badge in the top right shows
+**● running in your browser**.
+
+**Differences from running it on your computer:**
+
+| | Website (GitHub Pages) | Your computer (`python run.py`) |
+|---|---|---|
+| Live prices (⟳ Refresh, 1h/4h) | Binance: BTC = BTC/USDT, GOLD = PAXG/USDT (a token backed by 1 oz of gold) | Yahoo Finance: BTC-USD, GC=F gold futures |
+| Add ticker | Crypto from Binance (ETH, SOL, …) | Any Yahoo ticker (stocks, forex, metals) |
+| Scripts you save in the editor | Kept in *this browser* — click **Download** and add the file to your repo to keep it for good | Saved straight into `indicators/` / `strategies/` |
+| Daily BTC/GOLD data | Updated automatically every day by the **update-prices** workflow | ⟳ Refresh |
+
+To add a script for everyone: put the `.pine` or `.py` file in `indicators/` or `strategies/` and push.
+The site picks it up on the next deploy.
+
+## Run it on your computer
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/opentrade.git
@@ -40,7 +69,7 @@ Your browser opens at <http://127.0.0.1:8000> showing **BTC**. Switch to **GOLD*
 | `BTC` | Bitcoin / US dollar | Yahoo `BTC-USD` |
 | `GOLD` | Gold / US dollar | Yahoo `GC=F` (COMEX gold futures, tracks spot XAU/USD closely) |
 
-- Bundled files `data/BTC.csv` and `data/GOLD.csv` are daily and have no volume. Press **⟳ Refresh** once (needs internet) to update them to today and get volume.
+- `data/BTC.csv` and `data/GOLD.csv` are refreshed daily from Yahoo by the **update-prices** GitHub workflow (you can also run it by hand from the Actions tab).
 - **1h / 4h** download the last ~2 years of hourly data from Yahoo the first time you pick them, then cache it in `data/`.
 - **1wk** is built from the daily data.
 - **Add more:** pick "＋ Add ticker…" in the symbol menu, or add a short name in `PRESETS` in `app/core/data.py`
@@ -131,13 +160,19 @@ wouldn't have had. An entry signal while in the opposite position reverses it.
 ## Project layout
 
 ```
+index.html            the app (works on GitHub Pages and with run.py)
+static/engine.js      picks server mode or in-browser Python mode
 app/
+  api_core.py         all API logic, shared by both modes
+  browser.py          bridge for in-browser Python (Pyodide)
   core/data.py        data loading: CSV, sample, Yahoo
   core/ta.py          indicator math shared by Pine and Python
   core/backtest.py    bar-by-bar engine + metrics
   core/plugins.py     discovers/runs .py and .pine scripts
   pine/               Pine Script lexer, parser, interpreter
-  server.py           FastAPI routes
+  server.py           FastAPI server for `python run.py`
+tools/build_manifest.py  file list the website loads (built automatically on deploy)
+.github/workflows/    tests, Pages deploy, daily price update
 indicators/           your indicators (.pine / .py)
 strategies/           your strategies (.pine / .py)
 data/                 CSV market data

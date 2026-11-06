@@ -108,3 +108,12 @@ select, input[type=number], input[type=text], input[type=date] {
 .form-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .form-grid input, .form-grid select { width: 100%; }
 .form-grid label.check input { width: auto; }
+
+/* mode badge + first-load overlay */
+.badge { font-size: 11px; color: var(--up); border: 1px solid var(--border); border-radius: 10px; padding: 2px 8px; white-space: nowrap; }
+.loading { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: var(--bg); }
+.loading-card { text-align: center; color: var(--muted); display: grid; gap: 10px; justify-items: center; max-width: 420px; padding: 16px; }
+.loading-card .brand { color: var(--text); font-size: 18px; }
+.spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--accent); animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }

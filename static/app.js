@@ -13,14 +13,8 @@ const S = {
 };
 
 // ------------------------------------------------------------------ utils
-async function api(path, body, method) {
-  const opt = body !== undefined ? { method: method || "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
-                                 : { method: method || "GET" };
-  const r = await fetch(path, opt);
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.detail ? (typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail)) : r.statusText);
-  return j;
-}
+// All calls go through ENGINE (static/engine.js): the Python server, or Python-in-the-browser on GitHub Pages.
+const api = (path, body, method) => ENGINE.request(path, body, method);
 function status(msg, err) { const el = $("#status"); el.textContent = msg || ""; el.className = "status" + (err ? " err" : ""); }
 function fmt(v, d = 2) { return v === null || v === undefined ? "—" : typeof v === "number" ? v.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d }) : v; }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
@@ -102,7 +96,7 @@ async function refreshData(symbol) {
   status(`Downloading latest ${symbol} ${S.interval} prices…`);
   try {
     const r = await api("/api/refresh", { symbol, interval: S.interval });
-    status(`${r.symbol}: ${r.bars} bars, up to ${r.last.slice(0, 16).replace("T", " ")}`);
+    status(`${r.symbol}: ${r.bars} bars, up to ${r.last.slice(0, 16).replace("T", " ")}${r.source ? " · " + r.source : ""}`);
     return r.symbol;
   } finally { btn.disabled = false; }
 }
@@ -126,7 +120,9 @@ async function loadSymbol(sym) {
 $("#symbol").addEventListener("change", async e => {
   try {
     if (e.target.value === "__add") {
-      const t = prompt("Yahoo Finance ticker to add (e.g. ETH-USD, AAPL, SI=F for silver, EURUSD=X):");
+      const t = prompt(ENGINE.mode === "browser"
+        ? "Crypto to add from Binance (e.g. ETH, SOL, XRP, BNB):"
+        : "Yahoo Finance ticker to add (e.g. ETH-USD, AAPL, SI=F for silver, EURUSD=X):");
       if (!t) { e.target.value = S.symbol; return; }
       const sym = await refreshData(t.trim());
       await loadSymbols(sym);
@@ -148,11 +144,8 @@ $("#refreshData").addEventListener("click", async () => {
 $("#csvUpload").addEventListener("change", async e => {
   const f = e.target.files[0];
   if (!f) return;
-  const fd = new FormData(); fd.append("file", f);
   try {
-    const r = await fetch("/api/upload", { method: "POST", body: fd });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.detail);
+    const j = await ENGINE.upload(f);
     await loadSymbols(j.symbol);
     await loadSymbol(j.symbol);
   } catch (err) { status(err.message, true); }
@@ -522,7 +515,7 @@ async function saveEditor() {
 }
 
 $("#edSave").addEventListener("click", async () => {
-  try { await saveEditor(); await loadPlugins(); consoleMsg("Saved " + S.editor.file, "ok"); }
+  try { await saveEditor(); await loadPlugins(); consoleMsg("Saved " + S.editor.file + savedNote(), "ok"); }
   catch (err) { consoleMsg(err.message, "err"); }
 });
 
@@ -536,12 +529,12 @@ $("#edRun").addEventListener("click", async () => {
       if (ind) await runIndicator(ind);
       else await addIndicator(file);
       renderIndicatorList();
-      consoleMsg("✓ Applied to chart", "ok");
+      consoleMsg("✓ Applied to chart" + savedNote(), "ok");
     } else {
       await selectStrategy(file);
       await runBacktest();
       switchTab("editor");
-      consoleMsg(`✓ Backtest done — ${S.strategy.res.metrics.total_trades} trades, return ${fmt(S.strategy.res.metrics.total_return_pct)}%. See Strategy Tester tab.`, "ok");
+      consoleMsg(`✓ Backtest done — ${S.strategy.res.metrics.total_trades} trades, return ${fmt(S.strategy.res.metrics.total_return_pct)}%. See Strategy Tester tab.` + savedNote(), "ok");
     }
   } catch (err) { consoleMsg(err.message, "err"); status(""); }
 });
@@ -580,8 +573,30 @@ function switchTab(name) {
 $("#tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) switchTab(b.dataset.tab); });
 
 // ------------------------------------------------------------------ boot
+function savedNote() {
+  return ENGINE.mode === "browser"
+    ? " (kept in this browser — click Download and add the file to your GitHub repo to keep it for good)" : "";
+}
+
+$("#edDownload").addEventListener("click", () => {
+  if (!S.editor.file) return;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([code.value], { type: "text/plain" }));
+  a.download = S.editor.file;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  consoleMsg(`Downloaded ${S.editor.file} — put it in the ${S.editor.kind === "indicator" ? "indicators" : "strategies"}/ folder of your repo.`, "ok");
+});
+
 (async function boot() {
+  const overlay = $("#loading");
   try {
+    const mode = await ENGINE.init(msg => { if (msg) $("#loadingMsg").textContent = msg; });
+    $("#modeBadge").textContent = mode === "browser" ? "● running in your browser" : "● local server";
+    $("#modeBadge").title = mode === "browser"
+      ? "Python runs inside this page (Pyodide). Live prices come from Binance; BTC = BTC/USDT, GOLD = PAXG/USDT (gold-backed token)."
+      : "Connected to python run.py on this computer. Live prices come from Yahoo Finance.";
+    overlay.hidden = true;
     await loadSymbols();
     await loadPlugins();
     await loadSymbol($("#symbol").value || "BTC");
@@ -589,5 +604,8 @@ $("#tabs").addEventListener("click", e => { const b = e.target.closest("button")
     if (first) await openInEditor(first.kind, first.file);
     const ema = S.plugins.find(p => p.file === "ema_cross.pine");
     if (ema) { await selectStrategy(ema.file); }
-  } catch (err) { status(err.message, true); }
+  } catch (err) {
+    $("#loadingMsg").textContent = "Could not start: " + err.message;
+    status(err.message, true);
+  }
 })();

@@ -151,3 +151,46 @@ def test_api_btc_gold_and_intervals():
         r = c.post("/api/backtest", json={"symbol": sym, "interval": "1wk", "file": "ema_cross.pine"})
         assert r.status_code == 200, r.text
     assert c.get("/api/candles?symbol=SAMPLE&interval=1h").status_code == 400
+
+
+# --- browser (GitHub Pages / Pyodide) bridge -----------------------------------
+@pytest.fixture
+def bridge():
+    import json as _json
+    from app import browser
+    data.DOWNLOADER = browser._need_download  # what importing app.browser does in the web page
+    yield browser, _json
+    data.DOWNLOADER = None  # importing the bridge installs a browser-only hook; undo it
+
+
+def test_browser_bridge_matches_server(bridge):
+    browser, json = bridge
+    out = json.loads(browser.call("POST", "/api/backtest", "{}", json.dumps({"symbol": "GOLD", "file": "ema_cross.pine"})))
+    assert out["ok"] and out["data"]["metrics"]["total_trades"] > 0
+    server = TestClient(app).post("/api/backtest", json={"symbol": "GOLD", "file": "ema_cross.pine"}).json()
+    assert out["data"]["metrics"] == server["metrics"]
+
+
+def test_browser_bridge_asks_js_to_download(bridge, tmp_path, monkeypatch):
+    browser, json = bridge
+    monkeypatch.setattr(data, "DATA_DIR", tmp_path)
+    out = json.loads(browser.call("GET", "/api/candles", json.dumps({"symbol": "ETH", "interval": "4h"})))
+    assert out == {"ok": False, "need_download": {"symbol": "ETH", "base": "1h"}}
+    csv = "time,open,high,low,close,volume\n" + "\n".join(
+        f"2026-01-01T{h:02d}:00:00,{100+h},{101+h},{99+h},{100.5+h},5" for h in range(24))
+    assert json.loads(browser.ingest_csv("ETH", "1h", csv))["bars"] == 24
+    out = json.loads(browser.call("GET", "/api/candles", json.dumps({"symbol": "ETH", "interval": "4h"})))
+    assert out["ok"] and len(out["data"]["candles"]) == 6
+
+
+def test_browser_errors_are_json_not_crashes(bridge):
+    browser, json = bridge
+    out = json.loads(browser.call("POST", "/api/run", "{}", json.dumps({"kind": "indicator", "file": "x.pine", "code": "bad("})))
+    assert out["ok"] is False and "error" in out
+
+
+def test_manifest_lists_engine_files():
+    import subprocess, sys, json as _json
+    subprocess.run([sys.executable, "tools/build_manifest.py"], check=True, capture_output=True)
+    files = _json.load(open("manifest.json"))["files"]
+    assert "app/browser.py" in files and "app/server.py" not in files and "data/BTC.csv" in files

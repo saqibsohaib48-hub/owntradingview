@@ -1,0 +1,28 @@
+{
+ "files": [
+  "app/__init__.py",
+  "app/api_core.py",
+  "app/browser.py",
+  "app/core/__init__.py",
+  "app/core/backtest.py",
+  "app/core/data.py",
+  "app/core/plugins.py",
+  "app/core/ta.py",
+  "app/pine/__init__.py",
+  "app/pine/interpreter.py",
+  "app/pine/lexer.py",
+  "app/pine/parser.py",
+  "data/BTC.csv",
+  "data/GOLD.csv",
+  "indicators/bollinger_bands.pine",
+  "indicators/keltner_channels.py",
+  "indicators/macd.py",
+  "indicators/rsi_bands.pine",
+  "strategies/bollinger_reversion.py",
+  "strategies/donchian_breakout.py",
+  "strategies/ema_cross.pine",
+  "strategies/rsi_mean_reversion.pine",
+  "strategies/sma_cross.py",
+  "strategies/supertrend_long_short.pine"
+ ]
+}

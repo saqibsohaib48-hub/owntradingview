@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Open-source TradingView-style charts for Bitcoin and Gold with Pine Script and Python indicators, backtesting and strategy comparison. Runs in your browser.">
+  <title>OpenTrade</title>
+  <link rel="stylesheet" href="static/style.css">
+  <script src="static/vendor/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo">◆</span> OpenTrade</div>
+  <select id="symbol" title="Symbol"></select>
+  <select id="interval" title="Timeframe"></select>
+  <button class="btn ghost" id="refreshData" title="Download the latest prices from Yahoo Finance">⟳ Refresh</button>
+  <label class="btn ghost" title="Upload a CSV with time,open,high,low,close,volume">
+    Upload CSV <input type="file" id="csvUpload" accept=".csv" hidden>
+  </label>
+  <div class="ohlc" id="ohlc"></div>
+  <div class="spacer"></div>
+  <span class="status" id="status"></span>
+  <span class="badge" id="modeBadge"></span>
+</header>
+
+<main class="layout">
+  <section class="charts">
+    <div id="priceChart" class="chart-main"></div>
+    <div id="panes"></div>
+
+    <div class="bottom">
+      <nav class="tabs" id="tabs">
+        <button data-tab="tester" class="active">Strategy Tester</button>
+        <button data-tab="compare">Compare Strategies</button>
+        <button data-tab="optimize">Optimize</button>
+        <button data-tab="editor">Script Editor</button>
+      </nav>
+
+      <div class="tab-body" id="tab-tester">
+        <div class="empty" id="testerEmpty">Pick a strategy on the right and press <b>Run backtest</b>.</div>
+        <div id="testerContent" hidden>
+          <div class="metrics" id="metrics"></div>
+          <div class="split">
+            <div id="equityChart" class="chart-equity"></div>
+            <div class="trades-wrap"><table class="grid" id="tradesTable"></table></div>
+          </div>
+          <div class="warnings" id="btWarnings"></div>
+        </div>
+      </div>
+
+      <div class="tab-body" id="tab-compare" hidden>
+        <div class="row">
+          <div id="compareList" class="chips"></div>
+          <button class="btn primary" id="compareRun">Compare</button>
+        </div>
+        <div id="compareChart" class="chart-equity"></div>
+        <div class="table-wrap"><table class="grid" id="compareTable"></table></div>
+      </div>
+
+      <div class="tab-body" id="tab-optimize" hidden>
+        <div class="row">
+          <select id="optStrategy"></select>
+          <select id="optSort">
+            <option value="sharpe">Sort: Sharpe</option>
+            <option value="total_return_pct">Sort: Return %</option>
+            <option value="profit_factor">Sort: Profit factor</option>
+            <option value="max_drawdown_pct">Sort: Smallest drawdown</option>
+            <option value="win_rate_pct">Sort: Win rate</option>
+          </select>
+          <button class="btn primary" id="optRun">Run grid search</button>
+        </div>
+        <p class="hint">For each parameter enter a list (<code>10, 20, 30</code>) or a range <code>start:end:step</code> (<code>10:50:10</code>). Leave blank to keep the default.</p>
+        <div id="optGrid" class="form-grid"></div>
+        <div class="table-wrap"><table class="grid" id="optTable"></table></div>
+      </div>
+
+      <div class="tab-body editor-tab" id="tab-editor" hidden>
+        <div class="row">
+          <select id="edFile"></select>
+          <button class="btn ghost" id="edNew">New…</button>
+          <div class="spacer"></div>
+          <button class="btn ghost" id="edDownload" title="Save this script to your computer, then add it to your GitHub repo">Download</button>
+          <button class="btn ghost" id="edDelete">Delete</button>
+          <button class="btn ghost" id="edSave">Save</button>
+          <button class="btn primary" id="edRun">Save &amp; Apply</button>
+        </div>
+        <div class="editor">
+          <pre class="gutter" id="edGutter">1</pre>
+          <textarea id="edCode" spellcheck="false" wrap="off"></textarea>
+        </div>
+        <div class="console" id="edConsole"></div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="sidebar">
+    <h3>Indicators</h3>
+    <div id="indicatorList" class="list"></div>
+
+    <h3>Strategy</h3>
+    <select id="strategySelect"></select>
+    <div id="strategyInputs" class="form-grid"></div>
+
+    <h3>Backtest settings</h3>
+    <div class="form-grid" id="settings">
+      <label>Initial capital<input type="number" name="initial_capital" value="10000"></label>
+      <label>Position size
+        <select name="size_type">
+          <option value="percent_equity">% of equity</option>
+          <option value="fixed_cash">Fixed cash</option>
+          <option value="fixed_qty">Fixed quantity</option>
+          <option value="risk_percent">% equity risked (needs stop)</option>
+        </select>
+      </label>
+      <label>Size value<input type="number" name="size_value" value="100" step="any"></label>
+      <label>Commission % / side<input type="number" name="commission_pct" value="0.05" step="any"></label>
+      <label>Slippage %<input type="number" name="slippage_pct" value="0.02" step="any"></label>
+      <label>Stop loss %<input type="number" name="stop_loss_pct" placeholder="off" step="any"></label>
+      <label>Take profit %<input type="number" name="take_profit_pct" placeholder="off" step="any"></label>
+      <label class="check"><input type="checkbox" name="allow_short" checked> Allow shorts</label>
+      <label>From<input type="date" name="start"></label>
+      <label>To<input type="date" name="end"></label>
+    </div>
+    <button class="btn primary wide" id="runBacktest">Run backtest</button>
+    <button class="btn ghost wide" id="clearStrategy">Clear strategy from chart</button>
+  </aside>
+</main>
+
+<div class="modal" id="paramModal" hidden>
+  <div class="modal-card">
+    <h3 id="paramTitle">Settings</h3>
+    <div id="paramForm" class="form-grid"></div>
+    <div class="row end">
+      <button class="btn ghost" id="paramCancel">Cancel</button>
+      <button class="btn primary" id="paramApply">Apply</button>
+    </div>
+  </div>
+</div>
+
+<div class="loading" id="loading">
+  <div class="loading-card">
+    <div class="spinner"></div>
+    <div class="brand"><span class="logo">◆</span> OpenTrade</div>
+    <div id="loadingMsg">Starting…</div>
+  </div>
+</div>
+
+<script src="static/engine.js"></script>
+<script src="static/app.js"></script>
+</body>
+</html>

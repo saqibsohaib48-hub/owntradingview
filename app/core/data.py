@@ -97,8 +97,21 @@ def resample(df: pd.DataFrame, rule: str) -> pd.DataFrame:
     return out.dropna(subset=["open", "close"])
 
 
+class NeedDownload(Exception):
+    """Raised in browser mode: JavaScript must fetch this data, store it, then retry."""
+    def __init__(self, symbol: str, base: str):
+        super().__init__(f"{symbol} {base} needs downloading")
+        self.symbol, self.base = symbol, base
+
+
+# Set by app/browser.py when running inside the web page (no yfinance there).
+DOWNLOADER = None
+
+
 def download(symbol: str, base: str = "1d") -> pd.DataFrame:
     """Download from Yahoo Finance and cache to ./data. Needs internet + `pip install yfinance`."""
+    if DOWNLOADER is not None:
+        return DOWNLOADER(symbol.upper(), base)
     try:
         import yfinance as yf  # optional dependency
     except ImportError as e:
